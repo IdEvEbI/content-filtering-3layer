@@ -1,3 +1,4 @@
+# 开发工具依赖
 flake8==7.3.0
 iniconfig==2.1.0
 mccabe==0.7.0
@@ -7,3 +8,6 @@ pycodestyle==2.14.0
 pyflakes==3.4.0
 Pygments==2.19.2
 pytest==8.4.1
+
+# 生产依赖（与 requirements.txt 保持一致）
+-r requirements.txt
