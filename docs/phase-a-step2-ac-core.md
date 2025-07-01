@@ -18,6 +18,8 @@ pip install pyahocorasick==2.0.0  # 纯 Python 绑定，跨平台易部署
 
 # 将运行依赖写入锁定文件，保证 CI 环境一致
 echo "pyahocorasick==2.0.0" >> requirements.txt
+# 生产依赖
+echo "\n# 生产依赖（与 requirements.txt 保持一致）\n-r requirements.txt" >> requirements-dev.txt
 ```
 
 ---
