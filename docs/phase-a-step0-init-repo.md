@@ -200,6 +200,7 @@ git push -u origin init-repo
 git switch dev
 git pull origin dev
 git branch -d init-repo        # 本地删除已合并分支
+git remote prune origin        # 清理远程不存在的分支引用
 ```
 
 > **分支模型回顾**：功能分支 ➜ PR ➜ merge **dev**（集成）➜ 周期性 Release ➜ PR ➜ merge **main**（发布）➜ 自动部署。
