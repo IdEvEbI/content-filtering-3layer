@@ -198,17 +198,3 @@ git push -u origin build-ac-dict
 4. PR 合并至 `dev`，远程与本地功能分支已清理。
 
 > **一句话总结**：去重且可追溯的词库，为后续 AC 高效匹配奠定基础。
-
----
-
-## 建议文档名
-
-`phase-a-step1-build-ac-dict`
-
-## 建议保存目录路径
-
-`docs/phase-a`
-
-## 推荐 Commit Message
-
-`feat: add sensitive-word dedup script`
