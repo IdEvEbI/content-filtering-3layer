@@ -1,0 +1,15 @@
+[flake8]
+# 排除虚拟环境和其他不需要检查的目录
+exclude = 
+    .venv,
+    .git,
+    __pycache__,
+    .pytest_cache,
+    .mypy_cache,
+    .ruff_cache,
+    build,
+    dist,
+    *.egg-info
+
+# 最大行长度
+max-line-length = 120
