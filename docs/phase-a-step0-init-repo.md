@@ -129,13 +129,13 @@ pip freeze > requirements-dev.txt
 
    ```yaml
    name: CI
-
+   
    on:
      pull_request:
        branches: [dev, main]
      push:
        branches: [dev, main]
-
+   
    jobs:
      build:
        runs-on: ubuntu-latest
@@ -198,6 +198,7 @@ git push -u origin init-repo
 
 ```bash
 git switch dev
+git pull origin dev
 git branch -d init-repo        # 本地删除已合并分支
 ```
 
