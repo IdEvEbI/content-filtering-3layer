@@ -24,7 +24,7 @@ pip freeze | grep -E "(fastapi|uvicorn|httpx)" >> requirements.txt
 
 > **FastAPI**：现代高性能 Web 框架
 > **Uvicorn**：ASGI 服务器，运行 FastAPI 应用
-> **httpx**：异步/同步皆可的 HTTP 客户端，用于编写集成测试。
+> **httpx**：异步/同步皆可的 HTTP 客户端，用于编写集成测试
 
 ---
 
