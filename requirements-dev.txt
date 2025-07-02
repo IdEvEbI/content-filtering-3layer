@@ -8,6 +8,7 @@ pycodestyle==2.14.0
 pyflakes==3.4.0
 Pygments==2.19.2
 pytest==8.4.1
+python-dotenv==1.1.1
 
 # 生产依赖（与 requirements.txt 保持一致）
 -r requirements.txt
