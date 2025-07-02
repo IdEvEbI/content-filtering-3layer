@@ -1,7 +1,10 @@
 # 内容过滤功能所需的必要数据库字段
+import pytest
+
 REQUIRED_FIELDS = {"pid", "author", "authorid", "subject", "message", "useip"}
 
 
+@pytest.mark.integration
 def test_fields_exist(db_cursor):
     """
     测试数据库表是否包含所有必需字段
