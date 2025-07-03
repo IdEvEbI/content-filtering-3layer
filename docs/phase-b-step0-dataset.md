@@ -506,31 +506,42 @@ python scripts/tsv2jsonl.py
 ```bash
 docker run -d --name label-studio -p 8080:8080 \
   -e LABEL_STUDIO_DISABLE_SIGNUP=true \
-  heartexlabs/label-studio:1.11.0
+  heartexlabs/label-studio:latest
 ```
 
-浏览器访问 `http://localhost:8080` → 创建管理员账号。
+浏览器访问 `http://localhost:8080`，首次需注册管理员账号。
 
-#### 1‑3‑2 创建项目与标签模板
+#### 1‑3‑2 创建项目与标签设置
 
-在 **Settings → Labeling Interface** 粘贴：
+* 新建项目，进入 Settings → Labeling Interface。
+* 推荐标签模板（与采样数据一致，英文 value）：
 
 ```xml
-<Text name="text" value="$text"/>
-<Choices name="label" toName="text" choice="single">
-  <Choice value="0_合规"/>
-  <Choice value="1_疑似"/>
-  <Choice value="2_违规"/>
-</Choices>
+<View>
+  <Text name="text" value="$text"/>
+  <Choices name="label" toName="text" choice="single">
+    <Choice value="normal">normal</Choice>
+    <Choice value="suspicious">suspicious</Choice>
+    <Choice value="violation">violation</Choice>
+  </Choices>
+</View>
 ```
 
-#### 1‑3‑3 导入数据
+#### 1‑3‑3 数据导入
 
-Upload → 选择 `train.jsonl` (必要时 `seed.jsonl` 也一起导入)。
+* 推荐将采样数据（如 `train.jsonl`）转换为标准 JSON 数组（`train.json`），再导入。
+* 项目页面点击 Import，上传 `train.json`。
 
-#### 1‑3‑4 导出标注结果
+#### 1‑3‑4 标注与导出
 
-完成后：**Export → JSONL**，保存为 `exported_train.jsonl`（eval 同理）。
+* 完成标注后，点击 Export，选择 JSON 格式导出（如 `train_export.json`）。
+* 如需用于训练，可用脚本转换为 JSONL 格式：
+
+  ```bash
+  python scripts/jsonl_json_convert.py data/annotations/train_export.json --reverse
+  ```
+
+* 导出数据只包含已标注样本，且会包含额外元数据字段，训练前可用脚本过滤。
 
 ---
 
