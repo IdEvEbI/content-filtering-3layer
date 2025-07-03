@@ -10,7 +10,7 @@ import os
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Dict, Iterator, Optional, Tuple, TextIO
+from collections.abc import Iterator
 
 from mysql.connector import connect
 from tqdm import tqdm
@@ -23,7 +23,7 @@ except ImportError:
     from src.ac_core import SensitiveMatcher
 
 
-def get_db_config() -> Dict[str, str | int]:
+def get_db_config() -> dict[str, str | int]:
     """从环境变量获取数据库连接配置"""
     return {
         'host': os.getenv('DB_HOST', 'localhost'),
@@ -47,7 +47,7 @@ def get_database_connection():
             conn.close()
 
 
-def get_total_records(cursor, limit: Optional[int] = None) -> int:
+def get_total_records(cursor, limit: int | None = None) -> int:
     """获取总记录数"""
     if limit:
         return limit
@@ -64,7 +64,7 @@ def get_total_records(cursor, limit: Optional[int] = None) -> int:
     return result[0]
 
 
-def iter_rows(cursor, chunk_size: int, limit: Optional[int] = None) -> Iterator[Dict[str, str]]:
+def iter_rows(cursor, chunk_size: int, limit: int | None = None) -> Iterator[dict[str, str]]:
     """分批迭代数据库行数据"""
     sql = "SELECT pid, author, authorid, subject, message, useip FROM dzx_forum_post"
     if limit:
@@ -81,64 +81,34 @@ def iter_rows(cursor, chunk_size: int, limit: Optional[int] = None) -> Iterator[
             yield row
 
 
-class OutputFileManager:
-    """输出文件管理器"""
+class SimpleOutputFile:
+    """简单输出文件管理器"""
 
-    def __init__(self, base_path: Path, max_records: int):
-        self.base_path = base_path
-        self.max_records = max_records
-        self.file_index = 1
-        self.record_count = 0
-        self.current_file: Optional[TextIO] = None
-        self.current_filename = ""
+    def __init__(self, file_path: Path):
+        self.file_path = file_path
 
         # 确保输出目录存在
-        self.base_path.parent.mkdir(parents=True, exist_ok=True)
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # 创建第一个文件
-        self._create_new_file()
+        # 创建文件并写入头部
+        self.file = file_path.open("w", encoding="utf-8")
+        self.file.write("pid\tauthor\tauthorid\tuseip\thit_word\tcontext\n")
 
-    def _create_new_file(self) -> None:
-        """创建新的输出文件"""
-        if self.current_file:
-            self.current_file.close()
-
-        # 生成文件名
-        if self.base_path.suffix:
-            filename = f"{self.base_path.stem}_{self.file_index:03d}{self.base_path.suffix}"
-        else:
-            filename = f"{self.base_path.name}_{self.file_index:03d}.tsv"
-
-        file_path = self.base_path.parent / filename
-        self.current_file = file_path.open("w", encoding="utf-8")
-        self.current_file.write("pid\tauthor\tauthorid\tuseip\thit_word\tcontext\n")
-        self.current_filename = filename
-
-    def write_match(self, row: Dict[str, str], word: str, context: str) -> None:
+    def write_match(self, row: dict[str, str], word: str, context: str) -> None:
         """写入匹配结果"""
-        # 检查是否需要创建新文件
-        if self.record_count >= self.max_records:
-            self.file_index += 1
-            self.record_count = 0
-            self._create_new_file()
-            tqdm.write(f"切换到文件: {self.current_filename}")
-
-        # 写入数据
-        if self.current_file:
-            self.current_file.write(
-                f"{row.get('pid', '')}\t{row.get('author', '')}\t"
-                f"{row.get('authorid', '')}\t{row.get('useip', '')}\t"
-                f"{word}\t{context}\n"
-            )
-        self.record_count += 1
+        self.file.write(
+            f"{row.get('pid', '')}\t{row.get('author', '')}\t"
+            f"{row.get('authorid', '')}\t{row.get('useip', '')}\t"
+            f"{word}\t{context}\n"
+        )
 
     def close(self) -> None:
-        """关闭当前文件"""
-        if self.current_file:
-            self.current_file.close()
+        """关闭文件"""
+        if self.file:
+            self.file.close()
 
 
-def process_text_field(text: str, matcher: SensitiveMatcher) -> Iterator[Tuple[str, str]]:
+def process_text_field(text: str, matcher: SensitiveMatcher) -> Iterator[tuple[str, str]]:
     """处理文本字段，返回匹配的敏感词和上下文"""
     text = str(text or "")
     matches = list(matcher.find(text))
@@ -149,25 +119,43 @@ def process_text_field(text: str, matcher: SensitiveMatcher) -> Iterator[Tuple[s
         context_end = min(len(text), end + 20)
         context = text[context_start:context_end]
 
-        # 处理换行符
-        context = context.replace('\n', '\\n').replace('\r', '\\r')
+        # 处理换行符 - 统一转换为空格，保持可读性
+        context = context.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+        # 清理多余空格
+        context = ' '.join(context.split())
 
         yield word, context
+
+
+def process_single_post(row: dict[str, str], matcher: SensitiveMatcher) -> list[tuple[str, str]]:
+    """处理单个帖子的敏感词匹配"""
+    matches = []
+    text_fields = ["subject", "message"]
+
+    for field in text_fields:
+        try:
+            text = row.get(field, "")
+            for word, context in process_text_field(text, matcher):
+                matches.append((word, context))
+        except Exception as e:
+            # 记录错误但继续处理
+            print(f"处理字段 {field} 时出错 (pid={row.get('pid', 'unknown')}): {e}")
+            continue
+
+    return matches
 
 
 def scan_posts(
     cursor,
     matcher: SensitiveMatcher,
-    file_manager: OutputFileManager,
+    output_file: SimpleOutputFile,
     chunk_size: int,
-    limit: Optional[int] = None
-) -> Tuple[int, int]:
-    """扫描帖子并提取敏感词"""
+    limit: int | None = None
+) -> tuple[int, int]:
+    """扫描帖子主流程"""
     total_records = get_total_records(cursor, limit)
     scanned_count = 0
     hit_count = 0
-
-    text_fields = ["subject", "message"]
 
     for row in tqdm(
         iter_rows(cursor, chunk_size, limit),
@@ -179,19 +167,23 @@ def scan_posts(
     ):
         scanned_count += 1
 
-        # 处理每个文本字段
-        for field in text_fields:
-            text = row.get(field, "")
-            for word, context in process_text_field(text, matcher):
-                file_manager.write_match(row, word, context)
+        try:
+            # 处理单个帖子
+            matches = process_single_post(row, matcher)
+
+            # 写入匹配结果
+            for word, context in matches:
+                output_file.write_match(row, word, context)
                 hit_count += 1
+
+        except Exception as e:
+            # 记录错误但继续处理
+            print(f"处理帖子时出错 (pid={row.get('pid', 'unknown')}): {e}")
+            continue
 
         # 定期更新进度信息
         if scanned_count % 1000 == 0:
-            tqdm.write(
-                f"已扫描: {scanned_count}/{total_records} | "
-                f"命中: {hit_count} | 当前文件: {file_manager.current_filename}"
-            )
+            tqdm.write(f"已扫描: {scanned_count}/{total_records} | 命中: {hit_count}")
 
     return scanned_count, hit_count
 
@@ -200,10 +192,9 @@ def main() -> None:
     """主函数：批量扫描论坛帖子"""
     # 解析命令行参数
     parser = argparse.ArgumentParser(description="批量扫描论坛帖子中的敏感词")
-    parser.add_argument("--out", default="data/match_samples.tsv", help="输出文件路径")
+    parser.add_argument("--out", default="data/tsv/batch_scan.tsv", help="输出文件路径")
     parser.add_argument("--chunk", type=int, default=1000, help="每批处理的行数")
-    parser.add_argument("--test", action="store_true", help="测试模式：只扫描1000行记录")
-    parser.add_argument("--max-records", type=int, default=20000, help="每个文件最大记录数")
+    parser.add_argument("--test", type=int, help="测试模式：指定扫描记录数量")
     args = parser.parse_args()
 
     # 加载环境变量
@@ -213,31 +204,31 @@ def main() -> None:
     matcher = SensitiveMatcher("data/sensitive.txt")
 
     # 设置扫描限制
-    limit = 1000 if args.test else None
+    limit = args.test if args.test else None
 
     try:
         with get_database_connection() as conn:
             with conn.cursor(dictionary=True, buffered=False) as cursor:
-                # 创建输出文件管理器
-                file_manager = OutputFileManager(Path(args.out), args.max_records)
+                # 创建输出文件
+                output_file = SimpleOutputFile(Path(args.out))
 
                 try:
                     # 执行扫描
                     scanned_count, hit_count = scan_posts(
-                        cursor, matcher, file_manager, args.chunk, limit
+                        cursor, matcher, output_file, args.chunk, limit
                     )
 
                     # 输出最终统计
                     print("\n扫描完成！")
                     print(f"总扫描记录: {scanned_count}")
                     print(f"总命中次数: {hit_count}")
-                    print(f"输出文件: {file_manager.current_filename}")
+                    print(f"输出文件: {args.out}")
 
                 finally:
-                    file_manager.close()
+                    output_file.close()
 
     except Exception as e:
-        print(f"扫描过程中发生错误: {e}")
+        print(f"❌ 数据库连接或初始化错误: {e}")
         sys.exit(1)
 
 
