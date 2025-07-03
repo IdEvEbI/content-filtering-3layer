@@ -1,0 +1,23 @@
+{
+  "total_samples": 6000,
+  "train_samples": 4799,
+  "validation_samples": 598,
+  "test_samples": 603,
+  "label_distribution": {
+    "train": {
+      "normal": 4398,
+      "violation": 243,
+      "suspicious": 158
+    },
+    "validation": {
+      "suspicious": 19,
+      "normal": 549,
+      "violation": 30
+    },
+    "test": {
+      "normal": 551,
+      "violation": 31,
+      "suspicious": 21
+    }
+  }
+}
