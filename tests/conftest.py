@@ -1,7 +1,13 @@
 import os
 import pytest
-import mysql.connector
 from dotenv import load_dotenv
+
+# 条件导入，只在需要时导入 mysql.connector
+try:
+    import mysql.connector
+    MYSQL_AVAILABLE = True
+except ImportError:
+    MYSQL_AVAILABLE = False
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -23,6 +29,8 @@ def db_config():
 
 @pytest.fixture(scope="session")
 def db_connection(db_config):
+    if not MYSQL_AVAILABLE:
+        pytest.skip("mysql.connector not available")
     conn = mysql.connector.connect(**db_config)
     yield conn
     conn.close()

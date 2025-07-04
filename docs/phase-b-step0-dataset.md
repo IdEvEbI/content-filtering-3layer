@@ -16,6 +16,7 @@
 python -m venv .venv
 source .venv/bin/activate
 pip install pandas label-studio
+
 # 锁定依赖
 pip freeze | grep -E "(pandas|label-studio)" >> requirements.txt
 ```
@@ -114,17 +115,3 @@ git push -u origin semantic-dataset
 3. PR 合并至 dev，数据与脚本版本化管理，便于后续迭代
 
 > **一句话总结**：先拿 6k 三分类标注，奠定 LoRA 微调数据基线。
-
----
-
-## 建议文档名
-
-`phase-b-step0-dataset`
-
-## 建议保存目录路径
-
-`docs/phase-b`
-
-## 推荐 Commit Message
-
-`feat: add initial 6k labeled dataset & converter`
