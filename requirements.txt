@@ -7,3 +7,10 @@ tqdm==4.67.1
 label-studio==1.20.0
 label-studio-sdk==1.0.18
 pandas==2.3.0
+accelerate==1.8.1
+bitsandbytes==0.42.0
+datasets==3.6.0
+evaluate==0.4.1
+peft==0.10.0
+scikit-learn==1.7.0
+transformers==4.41.0

@@ -45,7 +45,7 @@
 
 ### 已完成工作
 
-#### 1. 数据处理流程 (最新完成)
+#### 1. 数据处理流程 (已完成)
 
 - ✅ 批量处理LLM诊断数据 → `data/llm_diagnosis_processed/`
 - ✅ 批量处理人工审核数据 → `data/human_review_processed/`
@@ -60,6 +60,34 @@
   - 生成6000样本数据集
   - 8:1:1训练/验证/测试集划分
   - 输出到 `data/sampled/`
+
+#### 2. LoRA模型训练 (最新完成 - 2025-01-27)
+
+- ✅ **环境配置与问题解决**
+  - 解决PyTorch版本兼容性问题 (2.2.2 vs 2.6+)
+  - 降级transformers到4.41.0，peft到0.10.0
+  - 修复tokenizer加载问题 (使用use_fast=False)
+  
+- ✅ **数据格式修复**
+  - 解决字符串标签到整数标签的转换问题
+  - 实现标签映射: normal→0, violation→1, suspicious→2
+  - 修复训练数据加载错误
+  
+- ✅ **训练配置优化**
+  - 调整评估策略避免保存错误
+  - 快速模式下禁用评估，正常模式启用
+  - 优化训练参数配置
+  
+- ✅ **成功完成训练**
+  - 模型: chinese-roberta-wwm-ext + LoRA
+  - 训练损失: 从1.15降到0.30
+  - 训练时间: 3分22秒 (快速模式)
+  - 模型保存: `models/quick_test_ckpt/`
+  
+- ✅ **项目清理**
+  - 删除12个临时调试脚本
+  - 保留3个有用脚本 (tsv2jsonl.py, batch_scan.py, build_ac.py)
+  - 创建详细的调试清理总结文档
 
 #### 2. 代码质量优化
 
@@ -93,16 +121,27 @@
 content-filtering-3layer/
 ├── ac_service/          # AC服务
 ├── data/
-│   ├── sampled/         # 6000样本数据集 (最新)
-│   ├── tsv/            # AC扫描结果 (最新)
-│   ├── llm_diagnosis_processed/  # LLM诊断数据 (最新)
-│   ├── human_review_processed/   # 人工审核数据 (最新)
-│   └── all_annotated_data.jsonl # 整合标注数据 (最新)
+│   ├── annotations/     # 训练数据集 (train/validation/test.jsonl)
+│   ├── tsv/            # AC扫描结果
+│   ├── llm_diagnosis_processed/  # LLM诊断数据
+│   ├── human_review_processed/   # 人工审核数据
+│   └── all_annotated_data.jsonl # 整合标注数据
+├── models/
+│   └── quick_test_ckpt/ # LoRA训练结果 (最新)
 ├── scripts/
-│   ├── batch_scan.py   # 批量扫描 (已优化)
-│   └── tsv2jsonl.py    # 数据采样 (新增)
+│   ├── batch_scan.py   # 批量扫描
+│   ├── tsv2jsonl.py    # 数据采样
+│   └── build_ac.py     # 敏感词处理
 ├── src/
-│   └── ac_core.py      # AC核心 (已优化)
+│   ├── ac_core.py      # AC核心
+│   └── semantic_service/
+│       └── train.py    # LoRA训练脚本 (最新)
+├── docs/
+│   ├── note/
+│   │   ├── debug-cleanup-summary.md  # 调试清理总结 (最新)
+│   │   ├── collaboration-patterns.md # 协作模式 (已更新)
+│   │   └── project-status-summary.md # 项目状态 (已更新)
+│   └── phase-b-step1-lora-train.md   # LoRA训练文档
 └── tests/              # 测试文件
 ```
 
@@ -132,15 +171,32 @@ content-filtering-3layer/
 
 ### 短期目标 (下次会话)
 
-1. **模型训练准备**
-   - 验证6000样本数据质量
-   - 准备Bert+LoRa训练环境
-   - 设计训练流程
+1. **流程验证与文档更新**
+   - 回滚代码重新验证LoRA训练流程
+   - 更新 `docs/phase-b-step1-lora-train.md` 为完整指南
+   - 确保流程在阿里云环境可复现
 
-2. **系统集成**
+2. **模型效果测试**
+   - 创建推理脚本测试训练好的模型
+   - 评估模型在验证集上的性能
+   - 分析不同类别的预测效果
+
+3. **完整训练**
+   - 去掉 `--quick` 参数进行完整训练
+   - 调整超参数优化模型性能
+   - 保存最佳模型检查点
+
+### 中期目标
+
+1. **系统集成**
    - 集成三层过滤系统
    - 性能测试和优化
    - API接口完善
+
+2. **生产部署**
+   - 阿里云环境部署
+   - 性能监控与调优
+   - 成本优化
 
 ### 中期目标
 
@@ -158,6 +214,16 @@ python scripts/batch_scan.py
 
 # 生成6000样本数据
 python scripts/tsv2jsonl.py --mode generate_6000
+```
+
+### 模型训练
+
+```bash
+# 快速测试训练
+python src/semantic_service/train.py --quick --out models/quick_test_ckpt
+
+# 完整训练
+python src/semantic_service/train.py --out models/lora_roberta_ckpt
 ```
 
 ### 代码质量
@@ -178,8 +244,15 @@ pytest tests/
 
 1. **数据文件**: 已生成的数据文件较大，注意版本控制
 2. **环境依赖**: 确保虚拟环境激活，依赖完整安装
-3. **文档更新**: 代码变更时及时更新相关文档
-4. **测试覆盖**: 新功能需要相应的测试用例
+   - transformers: 4.41.0
+   - peft: 0.10.0
+   - PyTorch: 2.2.2 (兼容版本)
+3. **模型训练**:
+   - 使用 `use_fast=False` 避免tokenizer问题
+   - 标签映射: normal→0, violation→1, suspicious→2
+   - 快速模式禁用评估，正常模式启用
+4. **文档更新**: 代码变更时及时更新相关文档
+5. **测试覆盖**: 新功能需要相应的测试用例
 
 ## 联系方式与上下文
 
@@ -190,5 +263,5 @@ pytest tests/
 
 ---
 
-*最后更新: 2025-07-02*
+*最后更新: 2025-01-27*
 *下次会话请先阅读此文档了解项目状态*
