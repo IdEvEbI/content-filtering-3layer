@@ -68,11 +68,28 @@ pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable
   # 注意：models/ 目录不包含在 Git 中，需要单独处理
   ```
 
+- **模型基座下载**（本地执行）：
+
+  ```bash
+  # 下载中文 RoBERTa 基座模型
+  git lfs install
+  git clone https://huggingface.co/hfl/chinese-roberta-wwm-ext
+  # 或使用国内镜像
+  git clone https://hf-mirror.com/hfl/chinese-roberta-wwm-ext
+  ```
+
 - **数据上传**：
 
   ```bash
   scp data/annotations/*.jsonl root@<公网IP>:/root/content-filtering-3layer/data/annotations/
   # 或用 ossutil/ossbrowser 上传大文件
+  ```
+
+- **模型基座上传**：
+
+  ```bash
+  # 将下载的模型基座上传到服务器
+  scp -r chinese-roberta-wwm-ext root@<公网IP>:/root/content-filtering-3layer/
   ```
 
 ---
@@ -81,10 +98,10 @@ pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable
 
 ```bash
 # 快速测试
-python src/semantic_service/train.py --quick --out models/quick_test_ckpt --fp16
+python src/semantic_service/train.py --quick --out models/quick_test_ckpt
 
 # 完整训练
-python src/semantic_service/train.py --out models/lora_roberta_ckpt --fp16
+python src/semantic_service/train.py --out models/lora_roberta_ckpt
 ```
 
 - **监控显存/性能**：
@@ -121,26 +138,60 @@ python src/semantic_service/train.py --out models/lora_roberta_ckpt --fp16
 
 ---
 
-## 7. 常见问题与排查
+## 7. 常见问题与踩坑经验
 
-- **依赖安装慢/失败**：使用国内镜像源
-- **CUDA/驱动不兼容**：建议用官方深度学习镜像
-- **显存不足**：调小 batch size 或用 --quick
-- **数据同步慢**：用 ossutil/ossbrowser
-- **训练中断**：用 nohup/screen/tmux 保持会话
+- **依赖安装慢/失败**：使用国内镜像源。
+- **CUDA/驱动不兼容**：建议用官方深度学习镜像，或手动安装/升级驱动（如 `apt install nvidia-driver-535`）。
+- **显存不足**：调小 batch size 或用 --quick。
+- **数据同步慢**：用 ossutil/ossbrowser。
+- **训练中断**：用 nohup/screen/tmux 保持会话。
 - **模型推理验证**：
 
   ```bash
-  python src/semantic_service/inference.py --model models/lora_roberta_ckpt --text "测试文本"
+  python src/semantic_service/inference.py --model models/lora_roberta_ckpt --base_model chinese-roberta-wwm-ext --text "测试文本"
   ```
+
+- **无法访问 Github/HuggingFace**：
+  - 本地下载代码和模型基座，打包上传服务器。
+  - 推理和训练均用本地模型路径，避免联网依赖。
+- **Conda vs venv**：远程训练推荐 Conda，见专门笔记。
 
 ---
 
-## 8. 参考链接
+## 8. 云平台对比与多云建议
+
+### 阿里云
+
+- 优点：国内访问快，价格低，适合数据在国内、对合规有要求的场景。
+- 缺点：无法直接访问 Github/HuggingFace，需本地打包上传，驱动需手动安装。
+
+### AWS（亚马逊云）
+
+- 优点：GPU 实例丰富，官方深度学习镜像（Deep Learning AMI）自带 CUDA/驱动/PyTorch/TensorFlow，开箱即用。
+- Github/HuggingFace 访问无障碍，pip/pytorch 镜像齐全。
+- 缺点：价格略高，部分区域 GPU 资源紧张。
+
+### GCP（谷歌云）
+
+- 优点：GPU/TPU 资源丰富，官方深度学习镜像完善，网络环境优越。
+- Github/HuggingFace 访问无障碍。
+- 缺点：价格略高，部分区域需实名认证。
+
+### 多云平台训练建议
+
+- 如果对网络环境和开源依赖要求高，建议优先选 AWS/GCP。
+- 国内数据合规、预算有限可选阿里云，但需提前准备好所有依赖和模型基座。
+- 代码和模型结构建议本地/云端统一，便于迁移。
+
+---
+
+## 9. 参考链接
 
 - [阿里云 ECS 官方文档](https://help.aliyun.com/zh/ecs/)
 - [PyTorch 官方镜像](https://pytorch.org/get-started/locally/)
 - [HuggingFace 国内加速](https://hf-mirror.com/)
+- [AWS Deep Learning AMI](https://aws.amazon.com/machine-learning/amis/)
+- [GCP Deep Learning VM](https://cloud.google.com/deep-learning-vm)
 
 ---
 

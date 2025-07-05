@@ -29,7 +29,7 @@ cd /.../content-filtering-3layer
 
 ```bash
 # 创建Python 3.12虚拟环境
-python3.12 -m venv .venv
+python -m venv .venv
 ```
 
 ### 4. 激活虚拟环境

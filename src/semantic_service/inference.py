@@ -11,15 +11,27 @@ from peft import PeftModel  # type: ignore
 class ContentFilterInference:
     """内容过滤推理类"""
 
-    def __init__(self, model_path: str, base_model_name: str = "hfl/chinese-roberta-wwm-ext"):
+    def __init__(self, model_path: str, base_model_name: str = ''):
         """
         初始化推理模型
         Args:
             model_path: LoRA模型路径
-            base_model_name: 基础模型名称
+            base_model_name: 基础模型名称（可为''，自动选择）
         """
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.label_map = {0: "normal", 1: "violation", 2: "suspicious"}
+
+        # 自动选择 base_model 路径
+        if not base_model_name:
+            local_base_model = Path("chinese-roberta-wwm-ext")
+            if local_base_model.exists() and (local_base_model / "config.json").exists():
+                base_model_name = str(local_base_model)
+                print(f"[INFO] 使用本地基座模型: {base_model_name}")
+            else:
+                base_model_name = "hfl/chinese-roberta-wwm-ext"
+                print(f"[INFO] 使用 HuggingFace Hub 模型: {base_model_name}")
+        else:
+            print(f"加载底座模型路径: {base_model_name}")
 
         # 加载分词器
         self.tokenizer = AutoTokenizer.from_pretrained(base_model_name, use_fast=False)
@@ -113,6 +125,7 @@ def main():
     """主函数"""
     parser = argparse.ArgumentParser(description="LoRA模型推理测试")
     parser.add_argument("--model", default="models/quick_test_ckpt", help="模型路径")
+    parser.add_argument("--base_model", default='', help="本地基础模型路径或名称（留空则自动选择）")
     parser.add_argument("--text", help="单条文本测试")
     parser.add_argument("--batch", action="store_true", help="批量测试模式")
     args = parser.parse_args()
@@ -125,7 +138,8 @@ def main():
 
     # 初始化推理模型
     try:
-        inference = ContentFilterInference(str(model_path))
+        base_model_arg = args.base_model if args.base_model else ''
+        inference = ContentFilterInference(str(model_path), base_model_name=base_model_arg)
     except Exception as e:
         print(f"❌ 模型加载失败: {e}")
         return

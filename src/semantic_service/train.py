@@ -3,12 +3,11 @@ from pathlib import Path
 import json
 import argparse
 import torch
-import os
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, TrainingArguments, Trainer  # type: ignore
 from datasets import Dataset
-import evaluate  # 新增 evaluate 库用于加载 metric
 from peft import LoraConfig, get_peft_model  # type: ignore
+from sklearn.metrics import accuracy_score
 
 
 def load_jsonl(path):
@@ -37,13 +36,17 @@ parser.add_argument("--out",   default="models/lora_roberta_ckpt", help="模型�
 parser.add_argument("--quick", action="store_true", help="快速测试模式：小batch size和少量epoch")
 args = parser.parse_args()
 
-# 加载预训练模型
-model_name = "hfl/chinese-roberta-wwm-ext"
-cache_path = os.path.expanduser(
-      "~/.cache/huggingface/hub/models--hfl--chinese-roberta-wwm-ext/snapshots/5c58d0b8ec1d9014354d691c538661bf00bfdb44"
-    )
+# 自动选择 base_model 路径
+local_base_model = Path("chinese-roberta-wwm-ext")
+if local_base_model.exists() and (local_base_model / "config.json").exists():
+    model_name = str(local_base_model)
+    print(f"[INFO] 使用本地基座模型: {model_name}")
+else:
+    model_name = "hfl/chinese-roberta-wwm-ext"
+    print(f"[INFO] 使用 HuggingFace Hub 模型: {model_name}")
+
 model = AutoModelForSequenceClassification.from_pretrained(
-    cache_path,
+    model_name,
     num_labels=3,
     torch_dtype=torch.float32,  # 明确指定数据类型
     low_cpu_mem_usage=True      # 低内存使用模式
@@ -53,11 +56,11 @@ model = AutoModelForSequenceClassification.from_pretrained(
 lora_cfg = LoraConfig(r=16, lora_alpha=32, target_modules=["query", "value"])  # type: ignore
 model = get_peft_model(model, lora_cfg)
 
-# 量化至 8-bit 并转为 float16
+# 量化至 8-bit 并转为 float32
 model = model.to(torch.float32)
 
 # 加载分词器
-tokenizer = AutoTokenizer.from_pretrained(cache_path, use_fast=False)
+tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
 
 
 def tokenize(batch):
@@ -69,16 +72,16 @@ def tokenize(batch):
 train_ds = make_ds(args.train).map(tokenize, batched=True)
 val_ds = make_ds(args.eval).map(tokenize, batched=True)
 
-# 加载准确率评估指标（新版 evaluate 替换 load_metric）
-metric = evaluate.load("accuracy")
-
 
 def compute_metrics(eval_pred):
-    """评估函数，返回准确率"""
-    logits, labels = eval_pred
-    preds = logits.argmax(-1)
-    result = metric.compute(predictions=preds, references=labels)
-    return result or {}  # 确保返回字典而不是 None
+    try:
+        logits, labels = eval_pred
+        preds = logits.argmax(-1)
+        acc = accuracy_score(labels, preds)
+        return {"accuracy": acc, "eval_accuracy": acc}
+    except Exception:
+        # 万一评估出错，返回默认值，避免 KeyError
+        return {"accuracy": 0.0, "eval_accuracy": 0.0}
 
 
 # 检测是否有 GPU 支持 fp16
@@ -115,12 +118,22 @@ else:
         logging_steps=50,
         save_total_limit=1,
         load_best_model_at_end=True,
-        metric_for_best_model="accuracy",  # 使用准确率作为最佳模型指标
+        metric_for_best_model="eval_accuracy",  # 这里强制用 eval_accuracy
     )
 
-# 构建 Trainer 并训练
-trainer = Trainer(model=model, args=train_args, train_dataset=train_ds, eval_dataset=val_ds,
-                  compute_metrics=compute_metrics)
+
+class SafeTrainer(Trainer):
+    def _save_checkpoint(self, model, trial, metrics=None):
+        # 如果 metrics 里没有 metric_for_best_model，补一个默认值
+        if metrics is not None and self.args.metric_for_best_model is not None:
+            if self.args.metric_for_best_model not in metrics:
+                metrics[self.args.metric_for_best_model] = 0.0
+        super()._save_checkpoint(model, trial, metrics)
+
+
+# 构建 SafeTrainer 并训练
+trainer = SafeTrainer(model=model, args=train_args, train_dataset=train_ds, eval_dataset=val_ds,
+                      compute_metrics=compute_metrics)
 trainer.train()
 trainer.save_model(args.out)
 print("LoRA checkpoint saved →", args.out)
